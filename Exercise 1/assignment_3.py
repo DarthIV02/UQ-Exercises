@@ -82,6 +82,9 @@ def run_control_variates(
 
             I_phi[j, i] = I_f[i] + alpha*(E_phi[j] - ((1/n) * np.sum(evaluated_values_g)))
 
+            variance_I_phi = (1 - pearson_coef)**2 * (np.var(evaluated_values_f, ddof=1) / n)
+            print("Variance phi: ", variance_I_phi)
+
     error = np.abs(I_phi - target_I_f)
     
     return error
