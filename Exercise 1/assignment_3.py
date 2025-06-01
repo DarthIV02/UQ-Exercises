@@ -95,7 +95,7 @@ def run_importance_sampling(
     # TODO: run the importance sampling method and return the absolute
     # errors of the resulting estimations.
     # ====================================================================
-    
+
     distr_1 = cp.Beta(5, 1)
     distr_2 = cp.Beta(0.5, 0.5)
 
@@ -108,7 +108,7 @@ def run_importance_sampling(
     for i, d in enumerate(distr):
         for j, n in enumerate(Ns):
             samples = d.sample(size=n, seed=seed)
-            evaluated_values = np.array([f(xi) for xi in samples])
+            evaluated_values = np.array([f(xi)/d.pdf(xi) for xi in samples])
             I_f[i, j] = (1/n) * np.sum(evaluated_values)
 
     error = np.abs(I_f - target_I_f)
@@ -125,7 +125,7 @@ if __name__ == "__main__":
     #value_to_for = f(10)
     sample_size = [10, 100, 1000, 10000]
     error_per_s = np.zeros((len(sample_size), 2))
-    seed = 100
+    seed = 42
 
     # ====================================================================
 
@@ -143,6 +143,7 @@ if __name__ == "__main__":
     # Importance Sampling
 
     error_is = run_importance_sampling(Ns=sample_size, seed=seed+2)
+    print(error_is)
         
     # ====================================================================
 
