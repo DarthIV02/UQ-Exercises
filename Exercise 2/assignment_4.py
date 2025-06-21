@@ -3,6 +3,7 @@ import chaospy as cp
 from scipy.integrate import odeint
 from matplotlib.pyplot import *
 import time
+import matplotlib.pyplot as plt
 
 from typing import Union, Optional
 import numpy.typing as npt
@@ -57,7 +58,7 @@ if __name__ == '__main__':
     w_left      = 0.95
     w_right     = 1.05
     # TODO: create uniform distribution object
-    distr_w = None
+    distr_w = cp.Uniform(w_left, w_right)
 
     # the truncation order of the polynomial chaos expansion approximation
     N = [1, 2, 3, 4, 5, 6]
@@ -73,17 +74,63 @@ if __name__ == '__main__':
     exp_cp = np.zeros(len(N))
     var_cp = np.zeros(len(N))
 
+    # compute relative error
+    stat_ref    = [-0.43893703, 0.00019678]
+    relative_error = lambda approx, ref: np.abs(1. - approx/ref)
+
+    error_K_mean = np.zeros((len(N)))
+    error_K_var = np.zeros((len(N)))
+
     # perform polynomial chaos approximation + the pseudo-spectral
-    for h in xrange(len(N)):
+    for h in range(len(N)):
 
         # TODO: create N[h] orthogonal polynomials using chaospy
-        poly            = None
-        # TODO: create K[h] quadrature nodes using chaospy
-        nodes, weights  = None
+        poly = cp.generate_expansion(h, distr_w, normed=True)
 
+        # TODO: create K[h] quadrature nodes using chaospy
+        nodes, weights = cp.generate_quadrature(h, distr_w, rule='G')
+        nodes = nodes[0]
+
+        ########################################################
+        # Evauate the function at the nodes                    #
+        ########################################################
+        M_eval = np.zeros_like(weights)
+        for i in range(len(weights)):
+            M_eval[i] = discretize_oscillator_odeint(model, atol, rtol, init_cond, args=(c,k,f,nodes[i]), t=t_grid, t_interest=t_interest)
+        
         # TODO: perform polynomial chaos approximation + the pseudo-spectral approach manually
+        
+        # Evaluate each polinomial at each node -> results in a matrix of n*k
+        evaluated_poly = np.array([[p(val) for val in nodes] for p in poly])
+
+        # M_eval * weights -> Is the f(t,x_i)w_k
+        # The dot product is going to multiply f(t,x_i)w_k * the respecitive evalution of all the nodes for a single plynomial
+        # This will automize the sum from 0 -> K-1
+        f_hat = np.dot(evaluated_poly, M_eval * weights)
+        
+        # Append a 0 just for code purposes -> so that f_hat[1:] doesn't crash but it won't affect the values
+        f_hat = np.append(f_hat, 0)
+        
+        exp_m[h] = f_hat[0]
+        var_m[h] = np.sum(np.power(f_hat[1:], 2))
+
+        error_K_mean[h] = relative_error(exp_m[h], stat_ref[0])
+        error_K_var[h] = relative_error(var_m[h], stat_ref[1])
 
         # TODO: perform polynomial chaos approximation + the pseudo-spectral approach using chaospy
+        
+        ########################################################
+        # Fit to create the gPC                                #
+        ########################################################
+        
+        gPCM, gPCcoeff = cp.fit_quadrature(poly, nodes, weights, M_eval, retall=True)
+        
+        ########################################################
+        # Compute quantities of interest                       #
+        ########################################################
+
+        exp_cp[h] = cp.E(gPCM, distr_w)
+        var_cp[h] = cp.Var(gPCM, distr_w)
         
     print('MEAN')
     print("K | N | Manual \t\t\t| ChaosPy")
@@ -94,4 +141,23 @@ if __name__ == '__main__':
     print("K | N | Manual \t\t| ChaosPy")
     for h in range(len(N)):
         print(K[h], '|', N[h], '|', "{a:1.12f}".format(a=var_m[h]), '\t|', "{a:1.12f}".format(a=var_cp[h]))
+    
+    print("-"*50)
+    print("Relative error for mean at K")
+    print(error_K_mean)
+    print("Relative error for var at K")
+    print(error_K_var)
 
+    fig, (ax1, ax2) = plt.subplots(2, sharex=True, figsize=(8, 6))
+    
+    ax1.plot(N, error_K_mean)  # Plot the chart
+    ax1.set_yscale('log')
+    ax1.set_ylabel("Relative Error for Mean")
+
+    ax2.plot(N, error_K_var)  # Plot the chart
+    ax2.set_yscale('log')
+    ax2.set_ylabel("Relative Error for Variance")
+    ax2.set_xlabel("M samples")
+
+    fig.tight_layout()
+    fig.savefig(f'bonus_exercise_2/outputs/assignment_4.png', bbox_inches='tight')  # save_image 
