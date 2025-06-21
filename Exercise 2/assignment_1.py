@@ -3,11 +3,13 @@ import chaospy as cp
 from scipy.integrate import odeint
 from matplotlib.pyplot import *
 import time
+import scipy.special as sp
+import matplotlib.pyplot as plt
 
 from typing import Union, Optional
 import numpy.typing as npt
 # if you want you can rely also on already implemented Oscillator class
-# from utils.oscillator import Oscillator
+#from utils.oscillator import Oscillator
 
 
 # to perform barycentric interpolation, we'll first compute the barycentric weights
@@ -80,23 +82,30 @@ if __name__ == '__main__':
     y1  = 0.0
     # initial conditions setup
     init_cond   = y0, y1
-    # model_kwargs = {"c": c, "k": k, "f": f}  # if you want to use the Oscillator class, you can uncomment this line
-    # init_cond = {"y0": y0, "y1": y1}  # if you want to use the Oscillator class, you can uncomment this line
+    #model_kwargs = {"c": c, "k": k, "f": f}  # if you want to use the Oscillator class, you can uncomment this line
+    #init_cond = {"y0": y0, "y1": y1}  # if you want to use the Oscillator class, you can uncomment this line
 
     # time domain setup
     t_max       = 10.
     dt          = 0.01
     grid_size   = int(t_max/dt) + 1
-    t_grid          = np.array([i*dt for i in range(grid_size)])
+    t_grid      = np.array([i*dt for i in range(grid_size)])
     #t_grid = np.arange(0, t_max + dt, dt)
     t_interest  = -1
+    seed = 42
 
     # TODO: w is no longer deterministic
-    w_left      = None
-    w_right     = None
+
+    ########################################################
+    # Set the edges of the uniform distribution of w       #
+    ########################################################
+
+    w_left      = 0.95
+    w_right     = 1.05
     stat_ref    = [-0.43893703, 0.00019678]
 
     # TODO: create (chaospy) uniform distribution object
+    w = cp.Uniform(w_left, w_right)
 
     # set the number of samples for Monte Carlo sampling
     no_grid_points_vec = [2, 5, 10, 20]
@@ -116,13 +125,156 @@ if __name__ == '__main__':
     # compute relative error
     relative_error = lambda approx, ref: np.abs(1. - approx/ref)
 
+    rel_error_mean_compilation_interpol = []
+    rel_error_var_compilation_interpol = []
+    time_compilation_interpol = []
+    rel_error_mean_compilation_mc = []
+    rel_error_var_compilation_mc = []
+    time_compilation_mc = []
+
+    plot_N = 5
+
     # TODO: builde interpolation-based surrogate model and comparing the stat. computed using the surrogate with a simple Monte Carlo sampling
     # iterate over vector containing different numbers of interpolation points
     for j, no_grid_points in enumerate(no_grid_points_vec):
         # TODO: a) Create the interpolant and evaluate the integral on the Lagrange interpolant using MC
+
         # TODO: a.1) generate the uniform grid and/or Chebyshev grid (i.e., experiments with one or the other),
+
+        start_time_inter = time.time()
+
+        ########################################################
+        # Build the grid over the w domain of U()              #
+        ########################################################
+
+        nodes, _ = sp.roots_chebyc(no_grid_points)
+
+        ###########################################################
+        # roots_chebyc returns the nodes in the interval [-2, 2]  #
+        # We need to scale them to be in the [w_right, w_left].   #
+        ###########################################################
+
+        chebyshev_grid = (nodes + 2) / 4 * (w_right - w_left) + w_left
+
+        ########################################################
+        # Compute the weights                                  #
+        ########################################################
+
+        weights = compute_barycentric_weights(chebyshev_grid)
+        
         # TODO: a.2) evaluate the function, and perform the interpolation
-        # TODO: b) Evaluate the integral directly using MC sampling
-        # TODO: c) compute expectation and variance and measure runtime
+        
+        y_10 = []
+        for i in range(no_grid_points):
+            y_10.append(discretize_oscillator_odeint(model, atol, rtol, init_cond, args=(c,k,f,chebyshev_grid[i]), t=t_grid, t_interest=t_interest))
+
+        time_x_fx = time.time() - start_time_inter
+        
+        for m in no_samples_vec:
+            w_s = w.sample(size=m, seed=seed)
+            I_n_g_y = np.zeros_like(w_s)
+
+            ########################################################
+            # Evaluate the interpolation model                     #
+            ########################################################
+
+            start_iter_interpolation = time.time()
+
+            for i, w_i in enumerate(w_s):
+                I_n_g_y[i] = barycentric_interp(w_i, chebyshev_grid, weights, y_10)
+
+            end_inter_interpolation = time.time() - start_iter_interpolation
+
+            # TODO: b) Evaluate the integral directly using MC sampling
+
+            ########################################################
+            # Evaluate the actual model with MC                    #
+            ########################################################
+
+            start_iter_mc = time.time()
+
+            y_10_mc = np.zeros_like(w_s)
+            for i, w_i in enumerate(w_s):
+                y_10_mc[i] = discretize_oscillator_odeint(model, atol, rtol, init_cond, args=(c,k,f,w_i), t=t_grid, t_interest=t_interest)
+
+            end_time_mc = time.time() - start_iter_mc
+
+            # TODO: c) compute expectation and variance and measure runtime
+
+            ########################################################
+            # Quantities of Interest for Interpolation             #
+            ########################################################
+
+            Exp_Interpolation = np.mean(I_n_g_y)
+            Var_Interpolation = np.var(I_n_g_y, ddof=1)
+
+            ########################################################
+            # Quantities of Interest for MC                        #
+            ########################################################
+
+            Exp_MC = np.mean(y_10_mc)
+            Var_MC = np.var(y_10_mc, ddof=1)
+            
+            print(f"-"*50)
+            print(f"With N = {no_grid_points} and M = {m}")
+            print(f"Interpolation: Mean = {Exp_Interpolation}, Var = {Var_Interpolation}")
+            rel_error_mean_int = relative_error(Exp_Interpolation, stat_ref[0])
+            rel_error_var_int = relative_error(Var_Interpolation, stat_ref[1])
+            print(f"Interpolation: Rel_Error Mean = {rel_error_mean_int}, Rel_Error Var = {rel_error_var_int}")
+            print(f"Interpolation Total time: {time_x_fx + end_inter_interpolation}")
+            print(f"MC: Mean = {Exp_MC}, Var = {Var_MC}")
+            rel_error_mean_mc = relative_error(Exp_MC, stat_ref[0])
+            rel_error_var_mc = relative_error(Var_MC, stat_ref[1])
+            print(f"MC: Rel_Error Mean = {rel_error_mean_mc}, Rel_Error Var = {rel_error_var_mc}")
+            print(f"MC Total time: {end_time_mc}")
+            print(f"-"*50)
+
+            if no_grid_points == plot_N:
+                rel_error_mean_compilation_interpol.append(rel_error_mean_int)
+                rel_error_mean_compilation_mc.append(rel_error_mean_mc)
+                rel_error_var_compilation_interpol.append(rel_error_var_int)
+                rel_error_var_compilation_mc.append(rel_error_var_mc)
+                time_compilation_interpol.append(time_x_fx + end_inter_interpolation)
+                time_compilation_mc.append(end_time_mc)
 
 
+    ########################################################
+    # Plot results                                         #
+    ########################################################
+
+    rel_error_mean_compilation_interpol = np.array(rel_error_mean_compilation_interpol)
+    rel_error_var_compilation_interpol = np.array(rel_error_var_compilation_interpol)
+    time_compilation_interpol = np.array(time_compilation_interpol)
+    rel_error_mean_compilation_mc = np.array(rel_error_mean_compilation_mc)
+    rel_error_var_compilation_mc = np.array(rel_error_var_compilation_mc)
+    time_compilation_mc = np.array(time_compilation_mc)
+
+    fig, (ax1, ax2, ax3) = plt.subplots(3, sharex=True, figsize=(10, 8))
+    
+    ax1.plot(no_samples_vec, rel_error_mean_compilation_interpol)  # Plot the chart
+    ax1.plot(no_samples_vec, rel_error_mean_compilation_mc)
+    ax1.set_yscale('log')
+    ax1.set_xscale('log')
+    ax1.set_title(f"Mean Relative Error for N={plot_N}")
+    ax1.set_ylabel("Relative Error for Mean")
+    ax1.legend(["Interpolation", "Simple MC"])
+
+    ax2.plot(no_samples_vec, rel_error_var_compilation_interpol)  # Plot the chart
+    ax2.plot(no_samples_vec, rel_error_var_compilation_mc)
+    ax2.set_yscale('log')
+    ax1.set_xscale('log')
+    ax2.set_title(f"Var Relative Error for N={plot_N}")
+    ax2.set_ylabel("Relative Error for Variance")
+    ax2.legend(["Interpolation", "Simple MC"])
+
+    ax3.set_xlabel("M samples")
+    ax3.set_xscale('log')
+    ax3.set_yscale('log')
+    ax3.plot(no_samples_vec, time_compilation_interpol)  # Plot the chart
+    ax3.plot(no_samples_vec, time_compilation_mc)
+    ax3.set_title(f"Time for N={plot_N}")
+    ax3.set_ylabel("Overall Time (s)")
+    ax3.legend(["Interpolation", "Simple MC"])
+
+    fig.tight_layout()
+    fig.savefig(f'bonus_exercise_2/outputs/assignment_1_N{plot_N}.png', bbox_inches='tight')  # save_image 
