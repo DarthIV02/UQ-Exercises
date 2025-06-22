@@ -150,14 +150,16 @@ if __name__ == '__main__':
 
     fig, (ax1, ax2) = plt.subplots(2, sharex=True, figsize=(8, 6))
     
-    ax1.plot(N, error_K_mean)  # Plot the chart
+    ax1.plot(N, error_K_mean, marker='o')  # Plot the chart
     ax1.set_yscale('log')
-    ax1.set_ylabel("Relative Error for Mean")
+    ax1.set_ylabel("Rel. Error in Mean")
+    ax1.grid(True)
 
-    ax2.plot(N, error_K_var)  # Plot the chart
+    ax2.plot(N, error_K_var, marker='o')  # Plot the chart
     ax2.set_yscale('log')
-    ax2.set_ylabel("Relative Error for Variance")
-    ax2.set_xlabel("M samples")
+    ax2.set_ylabel("Rel. Error in Variance")
+    ax2.set_xlabel("gPC Order $N$")
+    ax2.grid(True)
 
+    fig.suptitle("Relative Error Between Manual gPCE and Monte Carlo", fontsize=12)
     fig.tight_layout()
-    fig.savefig(f'bonus_exercise_2/outputs/assignment_4.png', bbox_inches='tight')  # save_image 
