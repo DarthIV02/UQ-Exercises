@@ -23,11 +23,12 @@ if __name__ == '__main__':
 
 		# TODO: compute <\phi_j(x), \phi_k(x)>_\rho, i.e. E[\phi_j(x) \phi_k(x)]
 
-		unif_expect = [[cp.E(phi_j * phi_k, dist=unif_distr) for phi_j in unif_pol] for phi_k in unif_pol]
-		norm_expect = [[cp.E(phi_j * phi_k, dist=norm_distr) for phi_j in norm_pol] for phi_k in norm_pol]
+		#unif_expect = [[cp.E(phi_j * phi_k, dist=unif_distr) for phi_j in unif_pol] for phi_k in unif_pol]
+		#norm_expect = [[cp.E(phi_j * phi_k, dist=norm_distr) for phi_j in norm_pol] for phi_k in norm_pol]
 
 		unif_expect_normed = [[cp.E(phi_j * phi_k, dist=unif_distr) for phi_j in unif_pol_normed] for phi_k in unif_pol_normed]
 		norm_expect_normed = [[cp.E(phi_j * phi_k, dist=norm_distr) for phi_j in norm_pol_normed] for phi_k in norm_pol_normed]
+
 
 		# TODO: print result for specific n
 		print("NORMED: \r")
@@ -41,11 +42,13 @@ if __name__ == '__main__':
 		print("\r")
 		print("\r")
 		
-		print("NOT NORMED: \r")
+
+		#IF	WE WANT NON-NORMALIZED ONES
+		#print("NOT NORMED: \r")
 		#print(f"UNIFORM pols n={n}: {unif_pol}")
 		#print(f"NORMAL pols n={n}: {norm_pol}")
-		print("\r")
-		print(f"Expected Value UNIFORM for n={n}: ") 
-		print(unif_expect)
-		print(f"Expected Value NORMAL for n={n}: ") #if normed=False, we get diag(|phi_1|, |phi-2|, ..., |phi_n|) instead of diag(1,...,1)
-		print(norm_expect)
+		#print("\r")
+		#print(f"Expected Value UNIFORM for n={n}: ") 
+		#print(unif_expect)
+		#print(f"Expected Value NORMAL for n={n}: ") #if normed=False, we get diag(|phi_1|, |phi-2|, ..., |phi_n|) instead of diag(1,...,1)
+		#print(norm_expect)
