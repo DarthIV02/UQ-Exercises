@@ -28,7 +28,8 @@ class WienerProcess:
 
         for n in range(n_samples): # For each sample -> generate a different Wiener realization over t_grid
             dW = rng.normal(size=(M), loc=0, scale=np.sqrt(self.T / M))   # increments ~ N(0, dt)
-            W[n] = np.concatenate([[0], np.cumsum(dW)])  # W_0 = 0, then add the current increment + the previous value
+            W[n] = np.concatenate([[0], np.cumsum(dW)]) + (self.mu * self.t_grid) # W_0 = 0, then add the current increment + the previous value
+            # mean is added as a shift
 
         return W
 
@@ -52,6 +53,8 @@ class WienerProcess:
             for t, ti in enumerate(self.t_grid): # At each time step
                 functions = eigenfunctions(ti) # Functions evaluated at t
                 kl[n, t] = np.sum(np.multiply(functions, part)) # Follow the approximation formula
+            kl[n] = kl[n] + (self.mu * self.t_grid) # Shift to take into account the mean
+            # If mean is 0 then there is no shift
 
         return kl # Realizations for the t_grid for each sample
 
